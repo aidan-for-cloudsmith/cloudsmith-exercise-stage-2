@@ -8,6 +8,7 @@ packages = [{include = "transform_service"}]
 [tool.poetry.dependencies]
 python = "^3.12"
 pydantic = "^2.8.0"
+minio = "^7.2.0"
 
 [tool.poetry.dev-dependencies]
 pytest = "^8.3.0"
