@@ -16,10 +16,12 @@ def transform_record(raw_data: dict[str, object]) -> TransformedRecord:
     """
     parsed = parse_raw_data(raw_data)
     record = TransformedRecord(
-        id=str(parsed.get("id", "")),
+        event_id=(str(parsed.get("event_id")) if parsed.get("event_id") is not None else None),
+        tenant_id=str(parsed.get("tenant_id", "")),
+        action=str(parsed.get("action", "")),
+        package=str(parsed.get("package", "")),
+        version=str(parsed.get("version", "")),
         timestamp=str(parsed.get("timestamp", "")),
-        source=str(parsed.get("source", "")),
-        processed_at=str(parsed.get("processed_at", "")),
-        version=int(parsed.get("version", 1)),
+        actor=(str(parsed.get("actor")) if parsed.get("actor") is not None else None),
     )
     return save_transformed_record(record)

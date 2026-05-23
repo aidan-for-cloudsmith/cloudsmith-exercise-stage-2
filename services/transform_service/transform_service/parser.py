@@ -79,4 +79,7 @@ def parse_raw_data(raw_data: dict[str, object]) -> dict[str, object]:
     Returns:
         Normalized data dictionary.
     """
+    if not isinstance(raw_data, dict):
+        raise TypeError("raw_data must be a dict")
+
     return raw_data.copy()
