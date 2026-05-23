@@ -4,9 +4,9 @@ services:
     build:
       context: ./services/transform_service
       dockerfile: Dockerfile
-    command: python -m transform_service.transformer
+    command: python -m transform_service.main
     volumes:
-      - .:/app
+      - ./services/transform_service:/app
   query_api:
     build:
       context: ./services/query_api
@@ -15,7 +15,7 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - .:/app
+      - ./services/query_api:/app
   minio:
     image: minio/minio:latest
     container_name: minio
@@ -27,12 +27,10 @@ services:
       MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-minio123}
     command: server /data --console-address ":9001"
     volumes:
-      - minio_data:/data
+      - ./minio_data:/data
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
       interval: 30s
       timeout: 10s
       retries: 3
 
-volumes:
-  minio_data:
