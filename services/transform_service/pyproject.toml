@@ -1,0 +1,18 @@
+[tool.poetry]
+name = "transform-service"
+version = "0.1.0"
+description = "Data transformation service"
+authors = ["aidanewen <aidanewen@example.com>"]
+packages = [{include = "transform_service"}]
+
+[tool.poetry.dependencies]
+python = "^3.12"
+pydantic = "^2.8.0"
+
+[tool.poetry.dev-dependencies]
+pytest = "^8.3.0"
+ruff = "^0.6.0"
+
+[build-system]
+requires = ["poetry-core>=1.5.0"]
+build-backend = "poetry.core.masonry.api"

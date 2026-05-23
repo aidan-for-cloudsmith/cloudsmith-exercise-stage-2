@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "cloudsmith-exercise-stage-2"
+version = "0.1.0"
+description = "Skeleton project structure for Cloudsmith exercise."
+authors = ["aidanewen <aidanewen@example.com>"]
+package-mode = false
+
+[tool.poetry.dependencies]
+python = "^3.12"
+
+[tool.poetry.dev-dependencies]
+pytest = "^8.3.0"
+ruff = "^0.6.0"
+
+[build-system]
+requires = ["poetry-core>=1.5.0"]
+build-backend = "poetry.core.masonry.api"

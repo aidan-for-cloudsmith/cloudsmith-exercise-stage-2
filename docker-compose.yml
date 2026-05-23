@@ -1,0 +1,19 @@
+version: '3.9'
+services:
+  transform_service:
+    build:
+      context: ./services/transform_service
+      dockerfile: Dockerfile
+    command: python -m transform_service.transformer
+    volumes:
+      - .:/app
+  query_api:
+    build:
+      context: ./services/query_api
+      dockerfile: Dockerfile
+    command: python -m query_api.main
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+
