@@ -1,0 +1,179 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+COMPOSE=(docker compose)
+TRANSFORM_SERVICE="transform_service"
+API_BASE_URL="${API_BASE_URL:-http://localhost:8000}"
+POLL_INTERVAL_SECONDS="${POLL_INTERVAL_SECONDS:-2}"
+TRANSFORM_TIMEOUT_SECONDS="${TRANSFORM_TIMEOUT_SECONDS:-120}"
+API_TIMEOUT_SECONDS="${API_TIMEOUT_SECONDS:-60}"
+
+GREEN=$'\033[0;32m'
+RED=$'\033[0;31m'
+BLUE=$'\033[0;34m'
+YELLOW=$'\033[0;33m'
+BOLD=$'\033[1m'
+RESET=$'\033[0m'
+
+TEST_NAMES=()
+TEST_URLS=()
+TEST_METHODS=()
+
+add_test() {
+  TEST_NAMES+=("$1")
+  TEST_URLS+=("$2")
+  TEST_METHODS+=("${3:-GET}")
+}
+
+section() {
+  printf '\n%s%s%s\n' "$BOLD" "$1" "$RESET"
+}
+
+info() {
+  printf '%s==>%s %s\n' "$BLUE" "$RESET" "$1"
+}
+
+success() {
+  printf '%sOK%s %s\n' "$GREEN" "$RESET" "$1"
+}
+
+fail() {
+  printf '%sFAIL%s %s\n' "$RED" "$RESET" "$1" >&2
+}
+
+require_command() {
+  if ! command -v "$1" >/dev/null 2>&1; then
+    fail "Missing required command: $1"
+    exit 1
+  fi
+}
+
+wait_for_transformer() {
+  local container_id
+  local started_at
+  local elapsed
+  local status
+  local exit_code
+
+  section "Waiting for transformer"
+  started_at="$(date +%s)"
+
+  while true; do
+    container_id="$("${COMPOSE[@]}" ps -a -q "$TRANSFORM_SERVICE")"
+
+    if [[ -n "$container_id" ]]; then
+      status="$(docker inspect -f '{{.State.Status}}' "$container_id")"
+      exit_code="$(docker inspect -f '{{.State.ExitCode}}' "$container_id")"
+
+      if [[ "$status" == "exited" ]]; then
+        if [[ "$exit_code" == "0" ]]; then
+          success "$TRANSFORM_SERVICE exited with code 0"
+          return 0
+        fi
+
+        fail "$TRANSFORM_SERVICE exited with code $exit_code"
+        "${COMPOSE[@]}" logs "$TRANSFORM_SERVICE"
+        exit 1
+      fi
+
+      printf '%sStill running%s %s is %s\n' "$YELLOW" "$RESET" "$TRANSFORM_SERVICE" "$status"
+    else
+      printf '%sWaiting%s container for %s has not been created yet\n' "$YELLOW" "$RESET" "$TRANSFORM_SERVICE"
+    fi
+
+    elapsed="$(($(date +%s) - started_at))"
+    if ((elapsed >= TRANSFORM_TIMEOUT_SECONDS)); then
+      fail "Timed out after ${TRANSFORM_TIMEOUT_SECONDS}s waiting for $TRANSFORM_SERVICE to finish"
+      "${COMPOSE[@]}" ps -a
+      "${COMPOSE[@]}" logs "$TRANSFORM_SERVICE"
+      exit 1
+    fi
+
+    sleep "$POLL_INTERVAL_SECONDS"
+  done
+}
+
+wait_for_api() {
+  local started_at
+  local elapsed
+
+  section "Waiting for query API"
+  started_at="$(date +%s)"
+
+  until curl -fsS "${API_BASE_URL}/health" >/dev/null; do
+    elapsed="$(($(date +%s) - started_at))"
+    if ((elapsed >= API_TIMEOUT_SECONDS)); then
+      fail "Timed out after ${API_TIMEOUT_SECONDS}s waiting for ${API_BASE_URL}/health"
+      "${COMPOSE[@]}" ps -a
+      "${COMPOSE[@]}" logs query_api
+      exit 1
+    fi
+
+    printf '%sWaiting%s query API is not ready yet\n' "$YELLOW" "$RESET"
+    sleep "$POLL_INTERVAL_SECONDS"
+  done
+
+  success "query API responded at ${API_BASE_URL}/health"
+}
+
+run_curl_test() {
+  local name="$1"
+  local url="$2"
+  local method="$3"
+  local response_file
+  local status_code
+
+  response_file="$(mktemp)"
+
+  status_code="$(
+    curl -sS \
+      -X "$method" \
+      -o "$response_file" \
+      -w '%{http_code}' \
+      "$url"
+  )"
+
+  if [[ "$status_code" =~ ^2[0-9][0-9]$ ]]; then
+    success "$name returned HTTP $status_code"
+    printf '    %s\n' "$(tr '\n' ' ' <"$response_file" | cut -c 1-180)"
+  else
+    fail "$name returned HTTP $status_code"
+    printf 'Response body:\n' >&2
+    sed 's/^/    /' "$response_file" >&2
+    rm -f "$response_file"
+    exit 1
+  fi
+
+  rm -f "$response_file"
+}
+
+require_command docker
+require_command curl
+
+add_test "Health check" "${API_BASE_URL}/health"
+add_test "Filter by tenant" "${API_BASE_URL}/events?tenant=acme_corp"
+add_test "Filter by time range" "${API_BASE_URL}/events?tenant=acme_corp&start_time=2025-03-15T00:00:00Z&end_time=2025-03-15T23:59:59Z"
+add_test "Filter by action type: download" "${API_BASE_URL}/events?tenant=acme_corp&action_type=download"
+add_test "Filter by action type: upload" "${API_BASE_URL}/events?tenant=acme_corp&action_type=upload"
+add_test "Filter by action type: delete" "${API_BASE_URL}/events?tenant=initech&action_type=delete"
+add_test "Filter by package name" "${API_BASE_URL}/events?tenant=acme_corp&package_name=requests"
+add_test "Combine filters" "${API_BASE_URL}/events?tenant=acme_corp&start_time=2025-03-14T00:00:00Z&end_time=2025-03-15T23:59:59Z&action_type=download&package_name=requests"
+add_test "Retention policy smoke test" "${API_BASE_URL}/events/retention?tenant=acme_corp&retention_days=9999" "POST"
+
+section "Starting Docker Compose stack"
+info "Rebuilding and recreating services"
+"${COMPOSE[@]}" up --build --force-recreate -d
+
+wait_for_transformer
+wait_for_api
+
+section "Running README curl examples"
+for index in "${!TEST_NAMES[@]}"; do
+  run_curl_test "${TEST_NAMES[$index]}" "${TEST_URLS[$index]}" "${TEST_METHODS[$index]}"
+done
+
+section "Integration test summary"
+success "Docker Compose stack started"
+success "$TRANSFORM_SERVICE completed successfully"
+success "${#TEST_NAMES[@]} README API examples returned 2xx responses"
+printf '\n%sAll integration checks passed.%s\n' "$GREEN" "$RESET"
