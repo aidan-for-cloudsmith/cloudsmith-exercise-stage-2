@@ -4,7 +4,7 @@ import json
 import logging
 from typing import Generator
 
-from services.transform_service.models import FailedRecord, TransformedRecord
+from transform_service.models import FailedRecord, TransformedRecord
 
 
 logger = logging.getLogger(__name__)

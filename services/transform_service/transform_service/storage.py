@@ -9,7 +9,7 @@ from datetime import datetime
 from minio import Minio
 from minio.error import S3Error
 
-from services.transform_service.models import FailedRecord, TransformedRecord
+from transform_service.models import FailedRecord, TransformedRecord
 
 DEFAULT_BUCKET = os.environ.get("MINIO_BUCKET", "cloudsmith-events")
 MINIO_ENDPOINT = os.environ.get("MINIO_ENDPOINT", "minio:9000")
