@@ -9,7 +9,7 @@ from datetime import datetime
 from minio import Minio
 from minio.error import S3Error
 
-from services.transform_service.models import TransformedRecord
+from services.transform_service.models import FailedRecord, TransformedRecord
 
 DEFAULT_BUCKET = os.environ.get("MINIO_BUCKET", "cloudsmith-events")
 MINIO_ENDPOINT = os.environ.get("MINIO_ENDPOINT", "minio:9000")
@@ -59,15 +59,15 @@ def save_transformed_record(record: TransformedRecord) -> TransformedRecord:
     return record
 
 
-def quarantine_bad_record(record: TransformedRecord) -> None:
+def quarantine_bad_record(record: FailedRecord, reason: str, tenant: str | None = None) -> None:
     """Handle records that fail validation or transformation."""
     client = _get_minio_client()
     bucket = DEFAULT_BUCKET
     _ensure_bucket(client, bucket)
 
-    tenant = record.tenant_id
+    tenant = tenant or "unknown_tenant"
     event_id = record.event_id or uuid.uuid4().hex
-    key = f"quarantine/vendor={tenant}/reason=transformation_failure/{event_id}.raw"
+    key = f"quarantine/vendor={tenant}/reason={reason}/{event_id}.raw"
 
     payload = json.dumps(record.__dict__).encode("utf-8")
     try:

@@ -12,3 +12,12 @@ class TransformedRecord:
     version: str
     timestamp: str
     actor: str | None
+
+
+@dataclass
+class FailedRecord:
+    """Represents a record that failed validation or transformation."""
+    raw_data: str
+    error_code: str
+    event_id: str | None = None
+    
